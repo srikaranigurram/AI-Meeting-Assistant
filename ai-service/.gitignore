@@ -28,3 +28,7 @@ htmlcov/
 # OS generated files
 .DS_Store
 Thumbs.db
+# Audio files - do not commit meeting recordings
+*.wav
+*.mp3
+*.m4a

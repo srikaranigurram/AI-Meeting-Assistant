@@ -1,2 +1,4 @@
 # AI Service Dependencies
-# (Currently empty for initial setup)
+openai-whisper
+python-dotenv
+

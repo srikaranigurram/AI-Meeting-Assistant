@@ -2,3 +2,4 @@
 openai-whisper
 python-dotenv
 google-genai
+psycopg[binary]

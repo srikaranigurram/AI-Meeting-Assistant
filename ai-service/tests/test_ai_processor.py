@@ -147,6 +147,38 @@ class TestAIProcessorGemini(unittest.TestCase):
             process_transcript("Sample meeting transcript text.")
         self.assertEqual(str(ctx.exception), "AI model returned invalid JSON.")
 
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "fake_test_key_123", "GEMINI_REQUEST_TIMEOUT": "1"}, clear=True)
+    @patch("time.sleep", return_value=None)
+    @patch("google.genai.Client")
+    def test_timeout_error_triggers_retry_and_fallback(self, mock_client_cls, mock_sleep):
+        """Verify that TimeoutError triggers retries, fallback, and finishes cleanly without hanging."""
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = TimeoutError("Simulated socket timeout")
+        mock_client_cls.return_value = mock_client
+
+        with self.assertRaises(RuntimeError) as ctx:
+            process_transcript("Sample transcript text.")
+
+        self.assertIn("Gemini service unavailable on primary", str(ctx.exception))
+        self.assertNotIn("fake_test_key_123", str(ctx.exception))
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "AIzaSySecretTestKey123456789012345678"}, clear=True)
+    @patch("google.genai.Client")
+    def test_sanitized_error_contains_no_secrets(self, mock_client_cls):
+        """Verify that secret keys and database URLs are redacted from exceptions."""
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = Exception("403 Forbidden with key AIzaSySecretTestKey123456789012345678 and postgresql://user:pass@host/db")
+        mock_client_cls.return_value = mock_client
+
+        with self.assertRaises(RuntimeError) as ctx:
+            process_transcript("Sample transcript text.")
+
+        err_msg = str(ctx.exception)
+        self.assertNotIn("AIzaSySecretTestKey123456789012345678", err_msg)
+        self.assertNotIn("user:pass", err_msg)
+        self.assertIn("[REDACTED_API_KEY]", err_msg)
+
 
 if __name__ == "__main__":
     unittest.main()
+

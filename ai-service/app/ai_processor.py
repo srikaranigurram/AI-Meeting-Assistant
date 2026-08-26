@@ -1,9 +1,13 @@
+import concurrent.futures
 import json
 import os
+import re
 import time
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+
+DEFAULT_REQUEST_TIMEOUT = 10.0  # seconds per individual API attempt
 
 PROMPT_TEMPLATE = """You are an AI meeting assistant. Analyze the provided meeting transcript and extract structured information.
 
@@ -37,39 +41,85 @@ Transcript:
 
 def _is_transient_error(e: Exception) -> bool:
     """
-    Checks whether an exception represents a temporary/transient service error (503, 429, rate limits, high demand).
+    Checks whether an exception represents a temporary/transient service error
+    (503, 429, rate limits, timeouts, connection errors, high demand).
     """
+    if isinstance(e, (TimeoutError, concurrent.futures.TimeoutError)):
+        return True
+
+    err_type = type(e).__name__.lower()
+    if "timeout" in err_type or "connecterror" in err_type:
+        return True
+
     err_str = str(e).lower()
     transient_keywords = [
         "503", "unavailable", "high demand", "spikes in demand",
         "429", "resourceexhausted", "serviceunavailable",
-        "connection", "timeout", "temporarily", "try again later"
+        "connection", "timeout", "temporarily", "try again later",
+        "deadline exceeded", "gateway time-out", "504"
     ]
     return any(keyword in err_str for keyword in transient_keywords)
 
 
-def _call_gemini_with_retries(client: genai.Client, model_name: str, prompt: str, max_retries: int = 3) -> str:
+def _sanitize_error_message(err: Exception, api_key: str = None) -> str:
     """
-    Calls the Gemini API with exponential backoff retries for transient errors.
-    Backoff delays: 2s, 4s, 8s.
+    Sanitizes error messages to prevent exposing API keys or database connection secrets.
+    """
+    err_str = str(err)
+    if api_key and api_key.strip():
+        err_str = err_str.replace(api_key.strip(), "[REDACTED_API_KEY]")
+    # Mask potential Google API key patterns
+    err_str = re.sub(r"AIzaSy[A-Za-z0-9_\-]{33}", "[REDACTED_API_KEY]", err_str)
+    # Mask potential database credentials
+    err_str = re.sub(r"postgresql://[^:]+:[^@]+@", "postgresql://***:***@", err_str)
+    return err_str
+
+
+def _call_gemini_single_attempt(client: genai.Client, model_name: str, prompt: str, timeout_seconds: float) -> str:
+    """
+    Executes a single Gemini generate_content API call wrapped in a hard ThreadPoolExecutor timeout.
     """
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
     )
+
+    def _execute():
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=config,
+        )
+        return response.text or ""
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_execute)
+        try:
+            return future.result(timeout=timeout_seconds)
+        except concurrent.futures.TimeoutError:
+            raise TimeoutError(f"Gemini API request to model '{model_name}' timed out after {timeout_seconds} seconds.") from None
+
+
+def _call_gemini_with_retries(
+    client: genai.Client,
+    model_name: str,
+    prompt: str,
+    max_retries: int = 3,
+    timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT
+) -> str:
+    """
+    Calls the Gemini API with exponential backoff retries for transient errors and bounded timeouts per attempt.
+    Backoff delays: 2s, 4s, 8s.
+    """
     backoff_delays = [2, 4, 8]
 
     for attempt in range(max_retries):
         try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=config,
-            )
-            return response.text or ""
+            return _call_gemini_single_attempt(client, model_name, prompt, timeout_seconds=timeout_seconds)
         except Exception as e:
             if _is_transient_error(e) and attempt < max_retries - 1:
                 delay = backoff_delays[attempt] if attempt < len(backoff_delays) else 8
-                print(f"[RETRY] Model '{model_name}' encountered temporary error (attempt {attempt + 1}/{max_retries}). Retrying in {delay}s...")
+                print(f"[RETRY] Model '{model_name}' encountered temporary error ({type(e).__name__}). Retrying ({attempt + 1}/{max_retries}) in {delay}s...")
                 time.sleep(delay)
             else:
                 raise e
@@ -79,8 +129,8 @@ def _call_gemini_with_retries(client: genai.Client, model_name: str, prompt: str
 
 def process_transcript(transcript: str) -> dict:
     """
-    Sends a meeting transcript to Google Gemini API with exponential backoff retries
-    and automatic fallback model support, returning structured meeting analysis.
+    Sends a meeting transcript to Google Gemini API with exponential backoff retries,
+    bounded timeouts, and automatic fallback model support, returning structured meeting analysis.
 
     Args:
         transcript (str): The transcript text to process.
@@ -104,27 +154,36 @@ def process_transcript(transcript: str) -> dict:
 
     primary_model = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
     fallback_model = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash")
+
+    try:
+        request_timeout = max(1, int(float(os.getenv("GEMINI_REQUEST_TIMEOUT", str(DEFAULT_REQUEST_TIMEOUT)))))
+    except ValueError:
+        request_timeout = int(DEFAULT_REQUEST_TIMEOUT)
+
     prompt = f"{PROMPT_TEMPLATE}\n{transcript.strip()}"
 
-    client = genai.Client(api_key=api_key.strip())
+    client = genai.Client(
+        api_key=api_key.strip(),
+        http_options=types.HttpOptions(timeout=request_timeout)
+    )
     raw_output = None
 
     try:
         # Attempt primary model with retries
-        raw_output = _call_gemini_with_retries(client, primary_model, prompt, max_retries=3)
+        raw_output = _call_gemini_with_retries(client, primary_model, prompt, max_retries=3, timeout_seconds=request_timeout)
     except Exception as primary_error:
         # If primary model fails with transient error, attempt fallback model
         if _is_transient_error(primary_error) and fallback_model and fallback_model != primary_model:
             print(f"[FALLBACK] Primary model '{primary_model}' unavailable after retries. Attempting fallback model '{fallback_model}'...")
             try:
-                raw_output = _call_gemini_with_retries(client, fallback_model, prompt, max_retries=1)
+                raw_output = _call_gemini_with_retries(client, fallback_model, prompt, max_retries=1, timeout_seconds=request_timeout)
             except Exception as fallback_error:
-                sanitized_error = str(fallback_error).replace(api_key, "[REDACTED_API_KEY]") if api_key in str(fallback_error) else str(fallback_error)
+                sanitized_error = _sanitize_error_message(fallback_error, api_key)
                 raise RuntimeError(
                     f"Gemini service unavailable on primary ('{primary_model}') and fallback ('{fallback_model}') models: {sanitized_error}"
                 ) from None
         else:
-            sanitized_error = str(primary_error).replace(api_key, "[REDACTED_API_KEY]") if api_key in str(primary_error) else str(primary_error)
+            sanitized_error = _sanitize_error_message(primary_error, api_key)
             raise RuntimeError(f"Gemini API request failed: {sanitized_error}") from None
 
     try:
@@ -183,3 +242,4 @@ def process_transcript(transcript: str) -> dict:
 
     parsed_json["action_items"] = validated_action_items
     return parsed_json
+

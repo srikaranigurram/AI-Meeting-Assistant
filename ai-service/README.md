@@ -7,7 +7,7 @@ This directory contains the **AI + Database** module for the **AI Meeting Assist
 2. **AI Processing**: Parsing, structuring, and analyzing meeting transcripts using Google Gemini API. *(Implemented in Step 3)*
 3. **Summarization**: Generating concise and informative meeting summaries. *(Implemented in Step 3)*
 4. **Action-Item Extraction**: Extracting key tasks, assignees, deadlines, and action items. *(Implemented in Step 3)*
-5. **Database Integration**: Storing meeting records, summaries, and action items using PostgreSQL. *(Upcoming Step 4)*
+5. **Database Integration**: Storing meeting records, summaries, and action items using Cloud PostgreSQL (Aiven). *(Implemented in Step 4)*
 6. **Backend Integration**: Connecting with the central team backend to expose service endpoints.
 7. **Containerization & Testing**: Dockerizing the service and implementing automated test suites for continuous integration.
 
@@ -48,9 +48,12 @@ FFMPEG_PATH=C:\path\to\ffmpeg\bin\ffmpeg.exe
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-flash-latest
 GEMINI_FALLBACK_MODEL=gemini-3.5-flash
+
+# Database Configuration (Aiven Cloud PostgreSQL)
+DATABASE_URL=postgresql://username:password@host:port/database?sslmode=require
 ```
 
-> **IMPORTANT**: The real `.env` file is git-ignored to ensure API keys and personal paths are never committed.
+> **SECURITY WARNING**: The real `.env` file is git-ignored. `DATABASE_URL` contains sensitive passwords and MUST NEVER be committed to Git or pushed to public repositories.
 
 ---
 
@@ -94,58 +97,42 @@ python -m app.cli_ai
 python -m app.cli_ai "Today we discussed the AI Meeting Assistant. Sree will finish the UI on Friday."
 ```
 
-#### Example Input Transcript
-```text
-"Today we discussed the AI Meeting Assistant project.
-Sree will complete the frontend by Friday.
-Ravi will configure the database on Saturday.
-The team decided to test the application on Monday."
-```
-
-#### Example Expected Output (Structured JSON)
-```json
-{
-  "summary": "The team discussed the AI Meeting Assistant project, frontend development, database configuration, and testing.",
-  "key_points": [
-    "Frontend development",
-    "Database configuration",
-    "Application testing"
-  ],
-  "decisions": [
-    "The application will be tested on Monday."
-  ],
-  "action_items": [
-    {
-      "task": "Complete the frontend",
-      "assigned_to": "Sree",
-      "deadline": "Friday",
-      "status": "pending"
-    },
-    {
-      "task": "Configure the database",
-      "assigned_to": "Ravi",
-      "deadline": "Saturday",
-      "status": "pending"
-    }
-  ]
-}
-```
-
 ---
 
-## End-to-End Pipeline Verification
+## Step 4: Cloud PostgreSQL Database Integration & Meeting History (Aiven)
 
-To test the complete audio-to-structured-analysis pipeline (`sample.wav` → Whisper → Gemini API → JSON):
+Step 4 connects the AI service to **Aiven Cloud PostgreSQL** to store meeting history and structured analysis.
+
+### 1. Aiven Cloud PostgreSQL Requirements & Credentials
+1. Sign up / log into [Aiven Console](https://console.aiven.io/).
+2. Create a PostgreSQL service.
+3. Retrieve the Service URI connection string (e.g. `postgresql://user:password@host:port/defaultdb?sslmode=require`).
+4. Set `DATABASE_URL` in your local `.env` file:
+   ```env
+   DATABASE_URL=postgresql://user:password@host:port/defaultdb?sslmode=require
+   ```
+
+### 2. Database Schema (`database/schema.sql`)
+The canonical schema is stored in `database/schema.sql`. It defines 4 relational tables:
+- **`MEETINGS`**: `id` (PK), `title`, `meeting_date`, `transcript`, `summary`, `created_at`, `updated_at`
+- **`KEY_POINTS`**: `id` (PK), `meeting_id` (FK -> MEETINGS ON DELETE CASCADE), `point`
+- **`DECISIONS`**: `id` (PK), `meeting_id` (FK -> MEETINGS ON DELETE CASCADE), `decision`
+- **`ACTION_ITEMS`**: `id` (PK), `meeting_id` (FK -> MEETINGS ON DELETE CASCADE), `task`, `assigned_to` (NULL allowed), `deadline` (NULL allowed), `status` (default 'pending')
+
+### 3. End-to-End Pipeline & Database Integration Test (`e2e_database_test`)
+To test the complete workflow (`sample.wav` → Whisper → Gemini API → Aiven PostgreSQL → Retrieve Meeting):
 
 ```powershell
-python -m app.e2e_test
+python -m app.e2e_database_test
 ```
+
+> **Note**: `app.e2e_database_test` requires a valid `DATABASE_URL` set in `.env` pointing to an accessible Aiven Cloud PostgreSQL instance.
 
 ---
 
 ## Running Automated Unit Tests
 
-Run all unit tests (Speech-to-Text + Gemini AI Processor) with mocked API responses (does NOT make network calls or require an API key):
+Run all offline unit tests (Speech-to-Text + Gemini AI Processor + Database Module with mocked DB connections). This command does NOT make network calls or require a live database:
 
 ```powershell
 python -m unittest discover -s tests

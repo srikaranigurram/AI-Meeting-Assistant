@@ -1,5 +1,5 @@
 -- AI Meeting Assistant Database Schema
--- Compatible with PostgreSQL / Aiven Cloud PostgreSQL
+-- Compatible with PostgreSQL / Neon Cloud PostgreSQL
 
 -- Drop tables if they exist (in reverse order of foreign key dependencies)
 DROP TABLE IF EXISTS ACTION_ITEMS CASCADE;

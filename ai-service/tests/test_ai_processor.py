@@ -78,7 +78,7 @@ class TestAIProcessorGemini(unittest.TestCase):
         self.assertEqual(mock_client.models.generate_content.call_count, 2)
         mock_sleep.assert_called_with(2)
 
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "fake_test_key_123", "GEMINI_FALLBACK_MODEL": "gemini-1.5-flash"}, clear=True)
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "fake_test_key_123", "GEMINI_FALLBACK_MODEL": "gemini-3.5-flash-lite"}, clear=True)
     @patch("time.sleep", return_value=None)
     @patch("google.genai.Client")
     def test_fallback_model_success_when_primary_exhausted(self, mock_client_cls, mock_sleep):
@@ -103,7 +103,7 @@ class TestAIProcessorGemini(unittest.TestCase):
         self.assertEqual(result["summary"], "Summary from fallback model")
         self.assertEqual(mock_client.models.generate_content.call_count, 4)
 
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "fake_test_key_123", "GEMINI_FALLBACK_MODEL": "gemini-1.5-flash"}, clear=True)
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "fake_test_key_123", "GEMINI_FALLBACK_MODEL": "gemini-3.5-flash-lite"}, clear=True)
     @patch("time.sleep", return_value=None)
     @patch("google.genai.Client")
     def test_failure_when_all_retries_and_fallback_exhausted(self, mock_client_cls, mock_sleep):

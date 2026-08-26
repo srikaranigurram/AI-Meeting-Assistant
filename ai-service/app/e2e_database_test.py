@@ -52,7 +52,7 @@ def main():
         sys.exit(1)
 
     # Step 3: Initialize DB Schema (Ensuring tables exist)
-    print("\n[Step 3/5] Verifying/Initializing database schema in Aiven PostgreSQL...")
+    print("\n[Step 3/5] Verifying/Initializing database schema in Neon PostgreSQL...")
     try:
         init_db()
         print("[Database] Schema verified successfully.")

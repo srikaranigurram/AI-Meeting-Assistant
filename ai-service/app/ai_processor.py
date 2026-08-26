@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-DEFAULT_REQUEST_TIMEOUT = 10.0  # seconds per individual API attempt
+DEFAULT_REQUEST_TIMEOUT = 30.0  # seconds per individual API attempt
 
 PROMPT_TEMPLATE = """You are an AI meeting assistant. Analyze the provided meeting transcript and extract structured information.
 
@@ -152,8 +152,8 @@ def process_transcript(transcript: str) -> dict:
             "GEMINI_API_KEY environment variable is missing. Please set GEMINI_API_KEY in your .env file or environment."
         )
 
-    primary_model = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-    fallback_model = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash")
+    primary_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    fallback_model = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite")
 
     try:
         request_timeout = max(1, int(float(os.getenv("GEMINI_REQUEST_TIMEOUT", str(DEFAULT_REQUEST_TIMEOUT)))))
@@ -164,7 +164,7 @@ def process_transcript(transcript: str) -> dict:
 
     client = genai.Client(
         api_key=api_key.strip(),
-        http_options=types.HttpOptions(timeout=request_timeout)
+        http_options=types.HttpOptions(timeout=int(request_timeout * 1000))
     )
     raw_output = None
 

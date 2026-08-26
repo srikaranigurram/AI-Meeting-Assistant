@@ -7,7 +7,7 @@ This directory contains the **AI + Database** module for the **AI Meeting Assist
 2. **AI Processing**: Parsing, structuring, and analyzing meeting transcripts using Google Gemini API. *(Implemented in Step 3)*
 3. **Summarization**: Generating concise and informative meeting summaries. *(Implemented in Step 3)*
 4. **Action-Item Extraction**: Extracting key tasks, assignees, deadlines, and action items. *(Implemented in Step 3)*
-5. **Database Integration**: Storing meeting records, summaries, and action items using Cloud PostgreSQL (Aiven). *(Implemented in Step 4)*
+5. **Database Integration**: Storing meeting records, summaries, and action items using Cloud PostgreSQL (Neon). *(Implemented in Step 4)*
 6. **Backend Integration**: Connecting with the central team backend to expose service endpoints.
 7. **Containerization & Testing**: Dockerizing the service and implementing automated test suites for continuous integration.
 
@@ -46,10 +46,10 @@ FFMPEG_PATH=C:\path\to\ffmpeg\bin\ffmpeg.exe
 
 # Google Gemini API Configuration for AI Service
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-flash-latest
-GEMINI_FALLBACK_MODEL=gemini-3.5-flash
+GEMINI_MODEL=gemini-3.6-flash
+GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
 
-# Database Configuration (Aiven Cloud PostgreSQL)
+# Database Configuration (Neon Cloud PostgreSQL)
 DATABASE_URL=postgresql://username:password@host:port/database?sslmode=require
 ```
 
@@ -78,13 +78,13 @@ Step 3 processes meeting transcripts into structured JSON analysis containing a 
 3. Set your API key in your local `.env` file:
    ```env
    GEMINI_API_KEY=AIzaSyYourActualKeyHere
-   GEMINI_MODEL=gemini-flash-latest
-   GEMINI_FALLBACK_MODEL=gemini-3.5-flash
+   GEMINI_MODEL=gemini-3.6-flash
+   GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
    ```
 
 ### 2. Resilience, Retry, and Fallback Architecture
-- **Primary Model**: `gemini-flash-latest` (Automatically points to the current active stable Gemini Flash model on Google AI Studio).
-- **Fallback Model**: `gemini-3.5-flash`
+- **Primary Model**: `gemini-3.6-flash`
+- **Fallback Model**: `gemini-3.5-flash-lite`
 
 ### 3. Running AI Processing CLI
 Test transcript analysis using the standalone CLI helper:
@@ -99,12 +99,12 @@ python -m app.cli_ai "Today we discussed the AI Meeting Assistant. Sree will fin
 
 ---
 
-## Step 4: Cloud PostgreSQL Database Integration & Meeting History (Aiven)
+## Step 4: Cloud PostgreSQL Database Integration & Meeting History (Neon)
 
-Step 4 connects the AI service to **Aiven Cloud PostgreSQL** to store meeting history and structured analysis.
+Step 4 connects the AI service to **Neon Cloud PostgreSQL** to store meeting history and structured analysis.
 
-### 1. Aiven Cloud PostgreSQL Requirements & Credentials
-1. Sign up / log into [Aiven Console](https://console.aiven.io/).
+### 1. Neon Cloud PostgreSQL Requirements & Credentials
+1. Sign up / log into [Neon Console](https://console.neon.tech/).
 2. Create a PostgreSQL service.
 3. Retrieve the Service URI connection string (e.g. `postgresql://user:password@host:port/defaultdb?sslmode=require`).
 4. Set `DATABASE_URL` in your local `.env` file:
@@ -120,13 +120,13 @@ The canonical schema is stored in `database/schema.sql`. It defines 4 relational
 - **`ACTION_ITEMS`**: `id` (PK), `meeting_id` (FK -> MEETINGS ON DELETE CASCADE), `task`, `assigned_to` (NULL allowed), `deadline` (NULL allowed), `status` (default 'pending')
 
 ### 3. End-to-End Pipeline & Database Integration Test (`e2e_database_test`)
-To test the complete workflow (`sample.wav` → Whisper → Gemini API → Aiven PostgreSQL → Retrieve Meeting):
+To test the complete workflow (`sample.wav` → Whisper → Gemini API → Neon PostgreSQL → Retrieve Meeting):
 
 ```powershell
 python -m app.e2e_database_test
 ```
 
-> **Note**: `app.e2e_database_test` requires a valid `DATABASE_URL` set in `.env` pointing to an accessible Aiven Cloud PostgreSQL instance.
+> **Note**: `app.e2e_database_test` requires a valid `DATABASE_URL` set in `.env` pointing to an accessible Neon Cloud PostgreSQL instance.
 
 ---
 

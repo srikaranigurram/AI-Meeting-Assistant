@@ -18,7 +18,7 @@ The project also demonstrates modern DevOps practices including Git/GitHub, Dock
 - **STEP 1: Project Setup** ✅
 - **STEP 2: Speech-to-Text (Whisper)** ✅
 - **STEP 3: AI Processing (Google Gemini API with retries & fallback)** ✅
-- **STEP 4: Cloud PostgreSQL Database + Meeting History (Aiven PostgreSQL)** ✅
+- **STEP 4: Cloud PostgreSQL Database + Meeting History (Neon PostgreSQL)** ✅
 
 ---
 
@@ -29,7 +29,7 @@ The project also demonstrates modern DevOps practices including Git/GitHub, Dock
 - 📝 Automatic speech-to-text transcription (Whisper)
 - 🤖 AI-generated meeting summaries (Google Gemini API)
 - ✅ Automatic action-item extraction with assigned tasks and deadlines
-- ☁️ Cloud database storage using Aiven PostgreSQL
+- ☁️ Cloud database storage using Neon PostgreSQL
 - 📚 Store meeting history, decisions, key discussion points
 - 🔒 Secure environment variable configuration (`DATABASE_URL`, `GEMINI_API_KEY`)
 - 🧪 Comprehensive offline unit testing & integration test suite
@@ -38,7 +38,7 @@ The project also demonstrates modern DevOps practices including Git/GitHub, Dock
 
 ## 🗄️ Database Architecture & Schema (Step 4)
 
-Meeting data and AI analysis are stored in **Aiven Cloud PostgreSQL** using a normalized relational schema (`database/schema.sql`):
+Meeting data and AI analysis are stored in **Neon Cloud PostgreSQL** using a normalized relational schema (`database/schema.sql`):
 
 - `MEETINGS`: Stores meeting metadata, transcript, and concise summary (`id`, `title`, `meeting_date`, `transcript`, `summary`, `created_at`, `updated_at`).
 - `KEY_POINTS`: Key discussion topics linked to a meeting (`id`, `meeting_id` FK -> MEETINGS ON DELETE CASCADE, `point`).
@@ -46,7 +46,7 @@ Meeting data and AI analysis are stored in **Aiven Cloud PostgreSQL** using a no
 - `ACTION_ITEMS`: Actionable tasks (`id`, `meeting_id` FK -> MEETINGS ON DELETE CASCADE, `task`, `assigned_to` [NULL allowed], `deadline` [NULL allowed], `status`).
 
 ### Database Setup & Connection
-Connect to Aiven PostgreSQL via the environment variable `DATABASE_URL`:
+Connect to Neon PostgreSQL via the environment variable `DATABASE_URL`:
 ```env
 DATABASE_URL=postgresql://username:password@host:port/database?sslmode=require
 ```
@@ -65,7 +65,7 @@ cd ai-service
 ```
 
 ### Running Real Cloud Database Integration Test
-Runs the end-to-end pipeline (`sample.wav` → Whisper → Gemini API → Aiven PostgreSQL → Retrieve Meeting):
+Runs the end-to-end pipeline (`sample.wav` → Whisper → Gemini API → Neon PostgreSQL → Retrieve Meeting):
 ```powershell
 cd ai-service
 .\venv\Scripts\python.exe -m app.e2e_database_test
@@ -95,7 +95,7 @@ cd ai-service
                 ┌──────────┘   └──────────┐
                 ▼                         ▼
        ┌─────────────────┐       ┌─────────────────┐
-       │  AI Processing  │       │Aiven PostgreSQL │
+       │  AI Processing  │       │ Neon PostgreSQL │
        │ Whisper + LLM   │       │    Database     │
        └────────┬────────┘       └─────────────────┘
                 │

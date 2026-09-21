@@ -1,0 +1,15 @@
+# Python virtual environment
+.venv/
+
+# Environment variables and secret keys
+.env
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Database file
+database.db
+
+# Uploaded audio and video files
+uploads/

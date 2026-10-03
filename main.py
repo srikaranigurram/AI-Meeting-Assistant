@@ -1,4 +1,12 @@
+import logging
 from fastapi import FastAPI
+
+# Configure application logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("ai_meeting_assistant")
 
 from database import engine, Base
 from models.user import User
@@ -14,6 +22,7 @@ from routers.meetings import router as meetings_router
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AI Meeting Assistant API")
+logger.info("AI Meeting Assistant API initialized")
 
 # Include all routers
 app.include_router(audio_router)
@@ -32,6 +41,7 @@ def root():
 
 @app.get("/health")
 def health_check():
+    logger.info("Health check endpoint accessed - status: healthy")
     return {
         "status": "healthy",
         "message": "AI Meeting Assistant backend is running"

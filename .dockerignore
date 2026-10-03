@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+database.db
+test*.db
+uploads/*
+!uploads/.gitkeep
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+Jenkinsfile

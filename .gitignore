@@ -7,9 +7,13 @@
 # Python cache files
 __pycache__/
 *.pyc
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Database file
 database.db
+test*.db
 
 # Uploaded audio and video files
 uploads/

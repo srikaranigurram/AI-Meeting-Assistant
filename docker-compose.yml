@@ -1,0 +1,90 @@
+version: '3.8'
+
+# ==============================================================================
+# Docker Compose Architecture for AI-Meeting-Assistant
+#
+# Architecture Concept:
+#                   Docker Compose
+#                         |
+#             ┌───────────┼───────────┐
+#             ↓           ↓           ↓
+#         Frontend     Backend    PostgreSQL (Optional Profile)
+#         (When added) Container   Container
+#                         |
+#                         ↓
+#                    AI Service (Gemini API)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # Backend Service (FastAPI)
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai_meeting_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Secrets provided via host .env file - NEVER hardcoded
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      # Default: SQLite database.db (compatible with Person 2 implementation)
+      # Can be switched to PostgreSQL if desired: postgresql://user:pass@db:5432/meeting_assistant
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./database.db}
+    volumes:
+      # Persist SQLite database and uploaded audio files
+      - ./database.db:/app/database.db
+      - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Service (Optional profile for production/future migration)
+  # Activated only when running: docker compose --profile postgres up
+  # ----------------------------------------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: ai_meeting_postgres
+    restart: unless-stopped
+    profiles:
+      - postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-meeting_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meeting_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-meeting_assistant}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-meeting_user} -d ${POSTGRES_DB:-meeting_assistant}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # Frontend Service (Placeholders for Person 1 / Frontend Team)
+  # Uncomment when frontend source code is committed to the repository
+  # ----------------------------------------------------------------------------
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: ai_meeting_frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - REACT_APP_BACKEND_URL=http://backend:8000
+  #   depends_on:
+  #     - backend
+
+volumes:
+  postgres_data:

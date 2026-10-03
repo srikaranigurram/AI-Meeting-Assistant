@@ -1,4 +1,3 @@
-```dockerfile
 # Dockerfile for AI Meeting Assistant Backend
 
 FROM python:3.11-slim

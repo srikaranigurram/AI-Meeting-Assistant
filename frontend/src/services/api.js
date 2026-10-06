@@ -17,8 +17,8 @@
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
-// Toggle mock mode. When true, simulates realistic network latency and mock responses.
-export const USE_MOCK_API = true;
+// Toggle mock mode. Controlled by VITE_USE_MOCK_API (default: false when connecting to backend)
+export const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 /**
  * Helper to simulate network latency for mock mode
@@ -209,3 +209,121 @@ export const authApi = {
     return localStorage.getItem('ai_meeting_remembered_email') || '';
   },
 };
+
+export const meetingsApi = {
+  getAuthHeaders() {
+    const token = localStorage.getItem('ai_meeting_auth_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  },
+
+  async getMeetings() {
+    const response = await fetch(`${API_BASE_URL}/meetings/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
+      },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to fetch meetings');
+    }
+    return await response.json();
+  },
+
+  async getMeeting(id) {
+    const response = await fetch(`${API_BASE_URL}/meetings/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
+      },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to fetch meeting');
+    }
+    return await response.json();
+  },
+
+  async createMeeting(payload) {
+    const response = await fetch(`${API_BASE_URL}/meetings/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to create meeting');
+    }
+    return await response.json();
+  },
+
+  async analyzeAndCreateMeeting({ title, transcript }) {
+    const response = await fetch(`${API_BASE_URL}/meetings/analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
+      },
+      body: JSON.stringify({ title, transcript }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to analyze and save meeting');
+    }
+    return await response.json();
+  },
+
+  async updateActionItemStatus(itemId, status) {
+    const response = await fetch(`${API_BASE_URL}/meetings/action-items/${itemId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to update action item');
+    }
+    return await response.json();
+  },
+
+  async uploadAudio(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = localStorage.getItem('ai_meeting_auth_token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    const response = await fetch(`${API_BASE_URL}/audio/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to upload audio');
+    }
+    return await response.json();
+  },
+
+  async deleteMeeting(id) {
+    const response = await fetch(`${API_BASE_URL}/meetings/${id}`, {
+      method: 'DELETE',
+      headers: {
+        ...this.getAuthHeaders(),
+      },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to delete meeting');
+    }
+    return await response.json();
+  },
+};
+

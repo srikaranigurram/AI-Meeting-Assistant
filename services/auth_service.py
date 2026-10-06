@@ -1,5 +1,4 @@
 import os
-
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -11,7 +10,7 @@ from models.user import User
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "ai_meeting_assistant_jwt_secret_dev_key_2026_super_secure")
 ALGORITHM = "HS256"
 
 security = HTTPBearer()

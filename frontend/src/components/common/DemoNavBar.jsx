@@ -7,14 +7,14 @@ export const DemoNavBar = ({ currentView, onViewChange }) => {
   const handleQuickDemoLogin = async () => {
     try {
       await login({
-        email: 'alex.chen@enterprise.ai',
+        email: 'test_chain@example.com',
         password: 'Password123!',
         rememberMe: true,
       });
       onViewChange('dashboard');
     } catch {
-      showToast('info', 'Demo Session', 'Navigating to Dashboard demo.');
-      onViewChange('dashboard');
+      showToast('info', 'Sign In Required', 'Please sign in with your backend credentials.');
+      onViewChange('login');
     }
   };
 
@@ -26,7 +26,7 @@ export const DemoNavBar = ({ currentView, onViewChange }) => {
   return (
     <header className="demo-nav-container">
       <div className="demo-nav-inner">
-        {/* Brand & Demo Pill */}
+        {/* Brand & Live Connected Pill */}
         <div className="demo-brand" onClick={() => onViewChange('dashboard')} role="button" tabIndex={0}>
           <div className="demo-brand-logo">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -40,7 +40,7 @@ export const DemoNavBar = ({ currentView, onViewChange }) => {
             <span>AI Meeting Assistant</span>
             <span className="demo-mode-badge">
               <span className="demo-mode-dot" />
-              Demo Mode
+              Live Connected
             </span>
           </div>
         </div>

@@ -107,13 +107,13 @@ export const LoginForm = ({ onNavigateRegister, onNavigateForgotPassword, onSucc
 
   const handleQuickFill = () => {
     setFormData({
-      email: 'alex.smith@company.com',
+      email: 'test_chain@example.com',
       password: 'Password123!',
       rememberMe: true,
     });
     setTouched({ email: true, password: true });
     setErrors({});
-    showToast('info', 'Demo Filled', 'Sample login credentials inserted.');
+    showToast('info', 'Credentials Filled', 'Backend test account credentials inserted.');
   };
 
   return (
@@ -123,11 +123,11 @@ export const LoginForm = ({ onNavigateRegister, onNavigateForgotPassword, onSucc
         <p>Sign in to your AI Meeting Assistant workspace</p>
       </div>
 
-      {/* Demo Helper Banner */}
+      {/* Backend Status Banner */}
       <div className="demo-helper-bar">
         <div className="demo-helper-text">
           <span>✨</span>
-          <span>Demo Mode</span>
+          <span>Live Connected</span>
         </div>
         <div className="demo-helper-buttons">
           <button

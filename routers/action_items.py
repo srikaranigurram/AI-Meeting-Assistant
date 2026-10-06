@@ -1,11 +1,20 @@
 import os
-
+import sys
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from google import genai
 
 load_dotenv()
+
+# Ensure ai-service root is in sys.path
+ai_service_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ai-service"))
+if ai_service_dir not in sys.path:
+    sys.path.insert(0, ai_service_dir)
+
+try:
+    from app.ai_processor import process_transcript
+except ImportError:
+    process_transcript = None
 
 router = APIRouter(
     prefix="/action-items",
@@ -19,50 +28,39 @@ class TranscriptRequest(BaseModel):
 
 @router.post("/")
 async def extract_action_items(data: TranscriptRequest):
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="Gemini API key is missing."
-        )
-
     if not data.transcript.strip():
         raise HTTPException(
             status_code=400,
             detail="Transcript cannot be empty."
         )
 
-    try:
-        client = genai.Client(api_key=api_key)
-
-        prompt = f"""
-You are an AI Meeting Assistant.
-
-Analyze the following meeting transcript and extract all action items.
-
-For each action item, include:
-1. Person responsible
-2. Task to complete
-3. Deadline, if mentioned
-
-If any information is not mentioned, write "Not mentioned".
-
-Present the result in a clear and organized format.
-
-Meeting Transcript:
-{data.transcript}
-"""
-
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=prompt
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Gemini API key is missing. Please configure GEMINI_API_KEY."
         )
 
-        return {
-            "action_items": response.text,
-            "message": "Action items extracted successfully!"
-        }
+    try:
+        if process_transcript is not None:
+            analysis = process_transcript(data.transcript)
+            action_items = analysis.get("action_items", [])
+            return {
+                "action_items": action_items,
+                "message": "Action items extracted successfully!"
+            }
+        else:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=f"Extract action items from the following meeting transcript:\n\n{data.transcript}"
+            )
+            return {
+                "action_items": response.text,
+                "message": "Action items extracted successfully!"
+            }
 
     except Exception as error:
         raise HTTPException(

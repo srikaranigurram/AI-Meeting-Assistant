@@ -1,11 +1,20 @@
 import os
-
+import sys
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from google import genai
 
 load_dotenv()
+
+# Ensure ai-service root is in sys.path
+ai_service_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ai-service"))
+if ai_service_dir not in sys.path:
+    sys.path.insert(0, ai_service_dir)
+
+try:
+    from app.ai_processor import process_transcript
+except ImportError:
+    process_transcript = None
 
 router = APIRouter(prefix="/summary", tags=["Summary"])
 
@@ -16,52 +25,40 @@ class TranscriptRequest(BaseModel):
 
 @router.post("/")
 async def generate_summary(data: TranscriptRequest):
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="Gemini API key is missing."
-        )
-
     if not data.transcript.strip():
         raise HTTPException(
             status_code=400,
             detail="Transcript cannot be empty."
         )
 
-    try:
-        client = genai.Client(api_key=api_key)
-
-        prompt = f"""
-You are an AI Meeting Assistant.
-
-Analyze the following meeting transcript and provide a clear,
-well-organized meeting summary.
-
-Include:
-1. Main Discussion Points
-2. Important Decisions
-3. Action Items
-4. Deadlines, if mentioned
-
-If any information is not available, write "Not mentioned".
-
-Keep the response concise and easy to understand.
-
-Meeting Transcript:
-{data.transcript}
-"""
-
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=prompt
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Gemini API key is missing. Please configure GEMINI_API_KEY."
         )
 
-        return {
-            "summary": response.text,
-            "message": "AI meeting summary generated successfully!"
-        }
+    try:
+        if process_transcript is not None:
+            analysis = process_transcript(data.transcript)
+            return {
+                "summary": analysis.get("summary", ""),
+                "key_points": analysis.get("key_points", []),
+                "decisions": analysis.get("decisions", []),
+                "message": "AI meeting summary generated successfully!"
+            }
+        else:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=f"Summarize the following meeting transcript:\n\n{data.transcript}"
+            )
+            return {
+                "summary": response.text,
+                "message": "AI meeting summary generated successfully!"
+            }
 
     except Exception as error:
         raise HTTPException(

@@ -6,7 +6,7 @@ import { RegisterForm } from './components/auth/RegisterForm';
 import { ForgotPasswordForm } from './components/auth/ForgotPasswordForm';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { ToastContainer } from './components/common/Toast';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
 import './styles/global.css';
 import './styles/auth.css';
 import './styles/toast.css';
@@ -14,7 +14,9 @@ import './styles/demoNav.css';
 import './styles/dashboard.css';
 
 const AuthAppContent = () => {
-  const [currentView, setCurrentView] = useState('login'); // 'login' | 'register' | 'forgot-password' | 'dashboard'
+  const [currentView, setCurrentView] = useState(() => {
+    return localStorage.getItem('ai_meeting_auth_token') ? 'dashboard' : 'login';
+  });
 
   return (
     <div className="auth-app-root">

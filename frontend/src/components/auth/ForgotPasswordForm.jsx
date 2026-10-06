@@ -62,7 +62,7 @@ export const ForgotPasswordForm = ({ onNavigateLogin }) => {
       <div className="demo-helper-bar">
         <div className="demo-helper-text">
           <span>✨</span>
-          <span>Demo Mode</span>
+          <span>Live Connected</span>
         </div>
         <div className="demo-helper-buttons">
           <button

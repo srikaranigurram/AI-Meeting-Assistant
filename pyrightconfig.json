@@ -1,0 +1,10 @@
+{
+  "extraPaths": [
+    "ai-service",
+    "AI-Meeting-Assistant/ai-service",
+    "./ai-service",
+    "./AI-Meeting-Assistant/ai-service",
+    "${workspaceFolder}/ai-service",
+    "${workspaceFolder}/AI-Meeting-Assistant/ai-service"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/ai-service",
+    "${workspaceFolder}/AI-Meeting-Assistant/ai-service"
+  ],
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}/ai-service",
+    "${workspaceFolder}/AI-Meeting-Assistant/ai-service"
+  ]
+}

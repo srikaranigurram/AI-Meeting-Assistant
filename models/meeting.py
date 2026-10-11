@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Text, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, BigInteger, String, Text, DateTime, ForeignKey, Float, func
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -14,6 +14,8 @@ class Meeting(Base):
     summary = Column(Text, nullable=False, default="")
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    audio_filename = Column(String(255), nullable=True)
+    audio_duration = Column(Float, nullable=True)
 
     user = relationship("User", backref="meetings")
     key_points = relationship("KeyPoint", back_populates="meeting", cascade="all, delete-orphan")

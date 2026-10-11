@@ -325,5 +325,23 @@ export const meetingsApi = {
     }
     return await response.json();
   },
+
+  getAudioUrl(meetingId) {
+    return `${API_BASE_URL}/audio/${meetingId}`;
+  },
+
+  async fetchAudioBlob(meetingId) {
+    const response = await fetch(`${API_BASE_URL}/audio/${meetingId}`, {
+      method: 'GET',
+      headers: {
+        ...this.getAuthHeaders(),
+      },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to fetch audio stream');
+    }
+    return await response.blob();
+  },
 };
 

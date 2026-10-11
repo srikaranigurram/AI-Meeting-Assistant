@@ -1,4 +1,5 @@
 import os
+from typing import cast
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -12,7 +13,7 @@ class TestAIProcessorGemini(unittest.TestCase):
         for invalid_input in ["", "   ", None]:
             with self.subTest(transcript=invalid_input):
                 with self.assertRaises(ValueError) as ctx:
-                    process_transcript(invalid_input)
+                    process_transcript(cast(str, invalid_input))
                 self.assertEqual(str(ctx.exception), "Transcript cannot be empty.")
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=True)

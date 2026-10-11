@@ -32,6 +32,10 @@ class MeetingCreate(BaseModel):
 
 
 def format_meeting_response(meeting: Meeting) -> dict:
+    audio_filename = getattr(meeting, "audio_filename", None)
+    audio_duration = getattr(meeting, "audio_duration", None)
+    audio_url = f"/api/v1/audio/{meeting.id}" if audio_filename else None
+
     return {
         "id": meeting.id,
         "user_id": meeting.user_id,
@@ -41,6 +45,9 @@ def format_meeting_response(meeting: Meeting) -> dict:
         "summary": meeting.summary,
         "created_at": meeting.created_at.isoformat() if meeting.created_at else None,
         "updated_at": meeting.updated_at.isoformat() if meeting.updated_at else None,
+        "audio_filename": audio_filename,
+        "audio_duration": audio_duration,
+        "audio_url": audio_url,
         "key_points": [kp.point for kp in meeting.key_points],
         "decisions": [d.decision for d in meeting.decisions],
         "action_items": [

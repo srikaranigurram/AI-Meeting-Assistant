@@ -10,9 +10,14 @@ export const DashboardView = ({ onNavigateLogin, onNavigateRegister }) => {
   const [selectedMeetingId, setSelectedMeetingId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Playback & Interactive controls
+  // Playback & Audio controls
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioSrc, setAudioSrc] = useState(null);
+  const [waveformPeaks, setWaveformPeaks] = useState([]);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals & Upload state
@@ -23,6 +28,16 @@ export const DashboardView = ({ onNavigateLogin, onNavigateRegister }) => {
   const [isUploading, setIsUploading] = useState(false);
 
   const fileInputRef = useRef(null);
+  const audioRef = useRef(null);
+
+  // Time formatter: formats seconds into MM:SS
+  const formatTime = useCallback((seconds) => {
+    if (!seconds || isNaN(seconds) || seconds < 0) return '00:00';
+    const totalSecs = Math.round(seconds);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }, []);
 
   // Load real meetings from FastAPI / Neon PostgreSQL
   const loadMeetings = useCallback(async (selectNewestId = null) => {
@@ -59,6 +74,100 @@ export const DashboardView = ({ onNavigateLogin, onNavigateRegister }) => {
     if (!meetings.length) return null;
     return meetings.find((m) => m.id === selectedMeetingId) || meetings[0];
   }, [meetings, selectedMeetingId]);
+
+  // Audio loading & waveform extraction effect for activeMeeting
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setPlaybackProgress(0);
+
+    let isSubscribed = true;
+    let objectUrl = null;
+
+    if (!activeMeeting || (!activeMeeting.audio_url && !activeMeeting.audio_filename)) {
+      setAudioSrc(null);
+      setAudioDuration(0);
+      setWaveformPeaks([]);
+      setIsAudioLoading(false);
+      return;
+    }
+
+    if (activeMeeting.audio_duration && activeMeeting.audio_duration > 0) {
+      setAudioDuration(activeMeeting.audio_duration);
+    } else {
+      setAudioDuration(0);
+    }
+
+    setIsAudioLoading(true);
+
+    // Fetch audio recording with JWT authentication
+    meetingsApi
+      .fetchAudioBlob(activeMeeting.id)
+      .then(async (blob) => {
+        if (!isSubscribed) return;
+        objectUrl = URL.createObjectURL(blob);
+        setAudioSrc(objectUrl);
+
+        // Decode audio data to extract exact duration & real waveform peaks
+        try {
+          const arrayBuffer = await blob.arrayBuffer();
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {
+            const audioCtx = new AudioContextClass();
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            if (isSubscribed) {
+              const exactDuration = audioBuffer.duration;
+              if (exactDuration && !isNaN(exactDuration) && exactDuration > 0) {
+                setAudioDuration(exactDuration);
+              }
+
+              // Compute real waveform from channel 0 amplitude samples
+              const channelData = audioBuffer.getChannelData(0);
+              const numBars = 24;
+              const blockSize = Math.floor(channelData.length / numBars);
+              const peaks = [];
+              for (let i = 0; i < numBars; i++) {
+                let sum = 0;
+                const start = i * blockSize;
+                const end = Math.min(start + blockSize, channelData.length);
+                for (let j = start; j < end; j++) {
+                  sum += Math.abs(channelData[j]);
+                }
+                const avg = sum / (end - start || 1);
+                // Scale to percentage height between 15% and 95%
+                const height = Math.min(95, Math.max(15, Math.round(avg * 400)));
+                peaks.push(height);
+              }
+              setWaveformPeaks(peaks);
+            }
+            audioCtx.close();
+          }
+        } catch (decodeErr) {
+          console.warn('AudioContext waveform decode note:', decodeErr);
+        }
+      })
+      .catch((err) => {
+        if (!isSubscribed) return;
+        console.error('Failed to load meeting audio recording:', err);
+        setAudioSrc(null);
+      })
+      .finally(() => {
+        if (isSubscribed) {
+          setIsAudioLoading(false);
+        }
+      });
+
+    return () => {
+      isSubscribed = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [activeMeeting]);
 
   // Aggregate Metrics derived directly from Neon PostgreSQL records
   const metrics = useMemo(() => {
@@ -113,13 +222,87 @@ export const DashboardView = ({ onNavigateLogin, onNavigateRegister }) => {
     }
   };
 
-  // Audio Playback simulation / toggle
-  const handlePlayToggle = () => {
-    setIsPlaying((prev) => !prev);
-    if (!isPlaying) {
-      showToast('info', 'Audio Playback', 'Playing audio recording playback.');
-      setPlaybackProgress((prev) => (prev >= 90 ? 10 : prev + 15));
+  // Audio Playback toggle
+  const handlePlayToggle = async () => {
+    if (!activeMeeting) {
+      showToast('info', 'Audio Unavailable', 'No active meeting selected.');
+      return;
     }
+
+    if (!audioSrc && !activeMeeting.audio_url && !activeMeeting.audio_filename) {
+      showToast('info', 'Audio Unavailable', 'No audio recording found for this meeting.');
+      return;
+    }
+
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      try {
+        await audio.play();
+        // The Playing toast is dispatched from handleAudioPlay when playback actually begins
+      } catch (err) {
+        console.error('Audio playback error:', err);
+        showToast('error', 'Playback Error', 'Could not play audio recording: ' + (err.message || 'Playback blocked.'));
+        setIsPlaying(false);
+      }
+    }
+  };
+
+  const handleAudioPlay = () => {
+    setIsPlaying(true);
+    showToast('info', 'Audio Playback', 'Playing audio recording playback.');
+  };
+
+  const handleAudioPause = () => {
+    setIsPlaying(false);
+  };
+
+  const handleAudioEnded = () => {
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setPlaybackProgress(0);
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+    }
+  };
+
+  const handleAudioTimeUpdate = () => {
+    if (!audioRef.current) return;
+    const cur = audioRef.current.currentTime;
+    const dur = audioRef.current.duration || audioDuration;
+    setCurrentTime(cur);
+    if (dur > 0) {
+      setPlaybackProgress(Math.min(100, (cur / dur) * 100));
+    }
+  };
+
+  const handleAudioLoadedMetadata = () => {
+    if (!audioRef.current) return;
+    const dur = audioRef.current.duration;
+    if (dur && !isNaN(dur) && isFinite(dur) && dur > 0) {
+      setAudioDuration(dur);
+    }
+  };
+
+  const handleAudioError = (e) => {
+    console.error('Audio element error:', e);
+    showToast('error', 'Audio Error', 'Error loading audio recording.');
+    setIsPlaying(false);
+  };
+
+  const handleSeekProgress = (e) => {
+    if (!audioRef.current || !audioDuration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const pct = Math.max(0, Math.min(1, clickX / rect.width));
+    const newTime = pct * audioDuration;
+    audioRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
+    setPlaybackProgress(pct * 100);
   };
 
   // Sign out
@@ -287,14 +470,21 @@ export const DashboardView = ({ onNavigateLogin, onNavigateRegister }) => {
     return Math.min(98, Math.max(72, Math.round(78 + (completed / items.length) * 18)));
   }, [activeMeeting]);
 
-  // Estimate meeting duration from transcript words
+  // Estimate or derive meeting duration: uses real audio duration when available, else transcript word count
   const meetingDurationFormatted = useMemo(() => {
-    if (!activeMeeting || !activeMeeting.transcript) return '05m 00s';
+    const dur = audioDuration || activeMeeting?.audio_duration;
+    if (dur && dur > 0) {
+      const totalSecs = Math.round(dur);
+      const mins = Math.floor(totalSecs / 60);
+      const secs = totalSecs % 60;
+      return `${mins < 10 ? '0' : ''}${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+    }
+    if (!activeMeeting || !activeMeeting.transcript) return '00m 00s';
     const words = activeMeeting.transcript.trim().split(/\s+/).filter(Boolean).length;
     const mins = Math.max(1, Math.round(words / 28));
     const secs = (words * 3) % 60;
     return `${mins < 10 ? '0' : ''}${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
-  }, [activeMeeting]);
+  }, [activeMeeting, audioDuration]);
 
   return (
     <div className="dashboard-layout">
@@ -305,6 +495,20 @@ export const DashboardView = ({ onNavigateLogin, onNavigateRegister }) => {
         accept="audio/*,.wav,.mp3,.m4a"
         style={{ display: 'none' }}
         onChange={handleFileUpload}
+      />
+
+      {/* Real HTML5 Audio Element for Playback */}
+      <audio
+        ref={audioRef}
+        src={audioSrc || undefined}
+        preload="auto"
+        onPlay={handleAudioPlay}
+        onPause={handleAudioPause}
+        onEnded={handleAudioEnded}
+        onTimeUpdate={handleAudioTimeUpdate}
+        onLoadedMetadata={handleAudioLoadedMetadata}
+        onError={handleAudioError}
+        style={{ display: 'none' }}
       />
 
       {/* Top Header & Quick Action Controls */}
@@ -474,7 +678,13 @@ export const DashboardView = ({ onNavigateLogin, onNavigateRegister }) => {
                 type="button"
                 className="audio-play-btn"
                 onClick={handlePlayToggle}
+                disabled={isAudioLoading || (!audioSrc && !activeMeeting?.audio_url && !activeMeeting?.audio_filename)}
                 title={isPlaying ? 'Pause Audio' : 'Play Audio'}
+                id="btn-play-pause-audio"
+                style={{
+                  opacity: (!audioSrc && !activeMeeting?.audio_url && !activeMeeting?.audio_filename) ? 0.45 : 1,
+                  cursor: (!audioSrc && !activeMeeting?.audio_url && !activeMeeting?.audio_filename) ? 'not-allowed' : 'pointer',
+                }}
               >
                 {isPlaying ? (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -490,12 +700,19 @@ export const DashboardView = ({ onNavigateLogin, onNavigateRegister }) => {
 
               <div className="audio-timeline-wrap">
                 <div className="audio-time-label">
-                  <span>{isPlaying ? '01:14' : '00:00'}</span>
-                  <span>{meetingDurationFormatted}</span>
+                  <span id="audio-current-time">{formatTime(currentTime)}</span>
+                  <span
+                    id="audio-total-duration"
+                    title={audioDuration > 0 ? `${audioDuration.toFixed(1)}s` : ''}
+                  >
+                    {audioDuration > 0 ? formatTime(audioDuration) : meetingDurationFormatted}
+                  </span>
                 </div>
                 <div
                   className="audio-progress-bar"
-                  onClick={() => setPlaybackProgress((prev) => (prev + 20) % 100)}
+                  onClick={handleSeekProgress}
+                  id="audio-progress-bar"
+                  title="Click to seek"
                 >
                   <div
                     className="audio-progress-fill"
@@ -505,18 +722,38 @@ export const DashboardView = ({ onNavigateLogin, onNavigateRegister }) => {
               </div>
             </div>
 
-            {/* Simulated Live Audio Wave */}
-            <div className="wave-bars" style={{ height: '24px', margin: 0 }}>
-              {[...Array(24)].map((_, i) => (
-                <div
-                  key={i}
-                  className="wave-bar"
-                  style={{
-                    animationPlayState: isPlaying ? 'running' : 'paused',
-                    animationDuration: `${0.8 + (i % 5) * 0.2}s`,
-                  }}
-                />
-              ))}
+            {/* Real Audio Waveform Decoded from File */}
+            <div
+              className="wave-bars"
+              style={{
+                height: '24px',
+                margin: 0,
+                cursor: audioDuration > 0 ? 'pointer' : 'default',
+              }}
+              onClick={handleSeekProgress}
+              title="Click waveform to seek in recording"
+            >
+              {(waveformPeaks.length === 24
+                ? waveformPeaks
+                : [25, 45, 70, 85, 60, 40, 75, 90, 80, 55, 30, 65, 80, 70, 50, 85, 95, 60, 40, 65, 80, 50, 35, 20]
+              ).map((peakHeight, i) => {
+                const isPast = (i / 24) <= (playbackProgress / 100);
+                return (
+                  <div
+                    key={i}
+                    className="wave-bar"
+                    style={{
+                      height: `${peakHeight}%`,
+                      background: isPast
+                        ? 'var(--gradient-ai)'
+                        : 'rgba(255, 255, 255, 0.2)',
+                      animation: isPlaying ? undefined : 'none',
+                      animationDuration: `${0.8 + (i % 5) * 0.2}s`,
+                      transition: 'background 0.15s ease, height 0.3s ease',
+                    }}
+                  />
+                );
+              })}
             </div>
           </div>
 

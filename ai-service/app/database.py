@@ -2,8 +2,19 @@ import os
 import re
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-import psycopg
-from psycopg.rows import dict_row
+import sys
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    try:
+        import psycopg2 as psycopg
+        from psycopg2.extras import RealDictCursor as dict_row
+        if "psycopg" not in sys.modules:
+            sys.modules["psycopg"] = psycopg
+    except ImportError:
+        psycopg = None
+        dict_row = None
 
 
 def sanitize_db_url(db_url: str) -> str:
